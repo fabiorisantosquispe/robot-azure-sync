@@ -2,18 +2,42 @@
 
 ## Overview
 
-This Python package provides synchronization capabilities for Azure-related tasks. Includes scripts to get data from Test Cases from Azure (`rf_azure_sync_get.py`), to Azure (`rf_azure_sync_patch.py`), and to run Robot Framework tests with specific tags.
+The **Robot Framework Azure Sync** package provides synchronization capabilities for Azure-related tasks. It includes scripts to retrieve data from Azure Test Cases **(`rf_azure_sync_get.py`)**, to update Azure Test Cases **(`rf_azure_sync_patch.py`)**, and to run Robot Framework tests with specific tags.
 
 ## Installation
 
 To install `rf_azure_sync`, you can use `pip`. Open a terminal and run:
 
 ```bash
-pip install -i https://test.pypi.org/simple/ rf-azure-sync==0.1.2
+pip install rf-azure-sync
 ```
+
+## Using the project source code
+
+Alternatively, you can download the project source code from the repository and use it directly. You will need to have Python installed on your system.
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/fabiorisantosquispe/rf_azure_sync.git
+```
+
+2. Navigate to the project directory:
+
+```bash
+cd rf_azure_sync
+```
+3. Use the provided scripts
+
+- sync_utils.py: Contains utility functions for synchronization.
+- rf_azure_sync_get.py: Script to get data from Azure Test Cases.
+- rf_azure_sync_patch.py: Script to patch data to Azure Test Cases.
+- rf_azure_sync.py: Main script for synchronization and running Robot Framework tests.
+
+
 # Usage
-## Synchronization
-To sync data to Azure, you can use the following commands:
+## Using the installed package
+If you installed the package via pip, you can use the following commands:
 
 ```bash
 #Run synchronize_get and synchronize_patch
@@ -26,12 +50,20 @@ rf_azure_sync get
 rf_azure_sync patch
 ```
 
-## Robot Framework Tests
-When running rf_azure_sync without extension it will use the tests folder path configured in sync_config.json to run Robot Framework tests with the 'Automation_Status Automated' tag:
+## Using the project source code
+If you are using the project source code directly, you can execute the scripts using Python:
 
 ```bash
-rf_azure_sync
+# Run synchronize_get and synchronize_patch
+python rf_azure_sync.py
+
+# Just run sync_get
+python rf_azure_sync.py get
+
+# Run sync_patch only
+python rf_azure_sync.py patch
 ```
+
 # Configuration
 The package requires a configuration file **'sync_config.json'** with Azure-related settings. If the file is not found, it will be created interactively.
 
@@ -64,8 +96,3 @@ Example **'sync_config.json'**:
      }
 }
 ```
-## License
-This project is licensed under the MIT License - see the [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/fabiorisantosquispe/rf_azure_sync/blob/main/LICENSE) file for details.
-## Contributing
-If you would like to contribute to this project, please follow the [![Contributing](https://img.shields.io/badge/Contributing-Read%20Guidelines-green)](https://github.com/fabiorisantosquispe/rf_azure_sync/blob/main/CONTRIBUTING.md)
-.

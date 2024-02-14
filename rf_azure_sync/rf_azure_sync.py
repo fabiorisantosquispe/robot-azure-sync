@@ -8,8 +8,10 @@ import sys
 import subprocess
 import json
 import os
-from .rf_azure_sync_patch import rf_azure_sync_patch
-from .rf_azure_sync_get import rf_azure_sync_get
+from sync_utils import create_sync_config
+from rf_azure_sync_patch import rf_azure_sync_patch
+from rf_azure_sync_get import rf_azure_sync_get
+
 def run_sync_get():
     """
     Run the synchronization process for getting data from Azure.
@@ -28,68 +30,8 @@ def run_robot_tests(tests_folder):
 
     :param tests_folder: The folder containing the Robot Framework tests.
     """
-    subprocess.run(["robot", "--include", "Automation_Status Automated", tests_folder], check=True)
-
-def create_sync_config():
-    """
-    Create the sync_config.json file interactively.
-    """
-    print("The sync_config.json file was not found. Let's create it.")
-
-    # Gather information interactively
-    tests_folder = input("Folder with Robot Framework tests to be synchronized (default: tests): ")
-    personal_access_token = input("Azure personal access token with read and write permission: ")
-    organization_name = input("Organization name (the one that comes after https://dev.azure.com/): ")
-    project_name = input(f"Project name (the one after https://dev.azure.com/{organization_name}/): ")
-    test_case = input("Prefix used to identify the Test Case id example (TC, TestCase): ")
-    user_story = input("Prefix used to identify the User Story id related to the Test Case example (US, UserStory): ")
-    bug = input("Prefix used to identify the Bug id related to the Test Case example (Bug): ")
-    title = input("Prefix used to identify the title of the Test Case example(Title, Scenario): ")
-    tested_by_reverse = input("Reverse the 'Tested By' relationship between Test Cases and User Stories: ")
-    iteration_path = input("Azure DevOps field for Iteration Path: ")
-    automation_status = input("Azure DevOps field for Automation Status: ")
-    ignore_sync = input("Azure DevOps field to mark Test Cases that should be ignored during synchronization: ")
-    system_tags = input("Azure DevOps field for System Tags: ")
-    priority = input("Azure DevOps field for Priority: ")
-    area_path = input("Azure DevOps field for Area Path: ")
-    team_project = input("Azure DevOps field for Team Project: ")
-    settings_section = input("Section in the Robot Framework settings file to store Azure-related settings: ")
-    test_cases_section = input("Section in the Robot Framework settings file to store synchronized Test Cases: ")
-
-
-    # Populate the sync_config structure
-    sync_config = {
-        "path": tests_folder,
-        "credentials": {
-            "personal_access_token": personal_access_token,
-            "organization_name": organization_name,
-            "project_name": project_name
-        },
-        "tag_config": {
-            "test_case": test_case,
-            "user_story": user_story,
-            "bug": bug,
-            "title": title,
-            "TestedBy-Reverse": tested_by_reverse,
-            "IterationPath": iteration_path,
-            "AutomationStatus": automation_status,
-            "ignore_sync": ignore_sync,
-            "System.Tags": system_tags,
-            "Priority": priority
-        },
-        "constants": {
-            "System.AreaPath": area_path,
-            "System.TeamProject": team_project,
-            "settings_section": settings_section,
-            "test_cases_section": test_cases_section
-        }
-    }
-
-    # Save the sync_config.json file
-    with open("sync_config.json", "w", encoding="utf-8") as config_file:
-        json.dump(sync_config, config_file, indent=2)
-
-    print("sync_config.json created successfully.")
+    subprocess.run(["robot", '--xunit', 'output_xunit.xml', '-d', 'results', tests_folder], check=False)
+    
 
 def rf_azure_sync():
     """
@@ -104,9 +46,6 @@ def rf_azure_sync():
 
     If sync_config.json is not found, create it interactively.
     """
-    if not os.path.isfile("sync_config.json"):
-        create_sync_config()
-
     if len(sys.argv) == 1:
         run_sync_get()
         rf_azure_sync_patch()
@@ -114,8 +53,8 @@ def rf_azure_sync():
         config_path = 'sync_config.json'
         if os.path.exists(config_path):
             with open(config_path, 'r', encoding='utf-8') as config_file:
-                config_data = json.load(config_file)
-                tests_folder = config_data.get('path', '')
+                sync_config = json.load(config_file)
+                tests_folder = sync_config.get('path', '')
                 if tests_folder:
                     run_robot_tests(tests_folder)
                 else:

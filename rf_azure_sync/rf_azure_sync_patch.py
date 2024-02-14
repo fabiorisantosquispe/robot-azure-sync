@@ -1,5 +1,5 @@
 """
-Module: rf_azure_devops_sync_patch
+Module: rf_azure_sync_patch
 
 This module provides functionality to synchronize test cases between Robot Framework
 and Azure DevOps. It includes classes and functions for extracting, parsing, and updating
@@ -15,12 +15,15 @@ Use:
 1. Configure 'sync_config.json' with the required settings.
 2. Run the script.
 """
+
 import base64
+import datetime
 import json
 import os
 import re
 import requests
 
+from sync_utils import (load_sync_config, read_robot_file, extract_test_tags_and_test_cases, extract_test_cases)
 
 class TestStep:
     """
@@ -80,22 +83,6 @@ class TestStep:
         }
 
 
-def load_sync_config(file_path="sync_config.json"):
-    """
-    Loads synchronization configuration from a JSON file.
-
-    Args:
-        file_path (str, optional): The path to the synchronization configuration JSON file.
-            Defaults to "sync_config.json".
-
-    Returns:
-        dict: A dictionary containing synchronization configuration.
-    """
-    with open(file_path, "r", encoding="utf-8") as config_file:
-        sync_config = json.load(config_file)
-    return sync_config
-
-
 def find_robot_files(folder_path):
     """
     Finds Robot Framework files in the specified folder and its subfolders.
@@ -112,87 +99,6 @@ def find_robot_files(folder_path):
             if file.endswith(".robot"):
                 robot_files.append(os.path.normpath(os.path.join(root, file)))
     return robot_files
-
-
-def read_robot_file(file_path):
-    """
-    Reads the content of a Robot Framework file.
-
-    Args:
-        file_path (str): The path to the Robot Framework file.
-
-    Returns:
-        str: The content of the Robot Framework file.
-    """
-    with open(file_path, "r", encoding="utf-8") as rf_file:
-        return rf_file.read()
-
-
-def extract_test_tags_and_test_cases(robot_content):
-    """
-    Extracts test tags and test cases from Robot Framework content.
-
-    Args:
-        robot_content (str): The content of a Robot Framework file.
-
-    Returns:
-        tuple: A tuple containing raw test cases data and test tags.
-    """
-    settings_match = re.search(
-        r"\*\*\*\s*Settings\s*\*\*\*(.*?)\*\*\*", robot_content, re.DOTALL
-    )
-    settings_data = settings_match.group(1).strip() if settings_match else ""
-    settings_lines = settings_data.split("\n")
-    settings_dict = {}
-    for line in settings_lines:
-        parts = line.split()
-        if len(parts) >= 2:
-            key = parts[0]
-            value = " ".join(parts[1:])
-            settings_dict[key] = value
-    test_tags_match = re.search(r"Test\s*Tags\s+(.+)", settings_data, re.IGNORECASE)
-    case_tags = test_tags_match.group(1).strip() if test_tags_match else None
-    case_tags = "; ".join(case_tags.split()) if case_tags else None
-    test_cases_match = re.search(
-        r"\*\*\*\s*Test Cases\s*\*\*\*(.*?)(?=\*\*\*|$)", robot_content, re.DOTALL
-    )
-    raw_test_cases_data = test_cases_match.group(1).strip() if test_cases_match else ""
-    return raw_test_cases_data, case_tags
-
-
-def parse_test_cases(raw_test_cases_data, config_settings):
-    """
-    Parses raw test cases data into a structured format.
-
-    Args:
-        raw_test_cases_data (str): Raw test cases data from a Robot Framework file.
-        config_settings (dict): Configuration settings.
-
-    Returns:
-        list: A list of dictionaries representing parsed test cases.
-    """
-    test_cases = []
-    current_test_case = {}
-    lines = raw_test_cases_data.split("\n")
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith(config_settings["tag_config"]["title"]):
-            if current_test_case:
-                test_cases.append(current_test_case)
-            current_test_case = {
-                "Title": line[len(config_settings["tag_config"]["title"]) :].strip(),
-                "Tags": "",
-                "Steps": [],
-            }
-        elif line.startswith("[tags]"):
-            current_test_case["Tags"] = line[len("[tags]") :].strip()
-        else:
-            current_test_case["Steps"].append(line)
-    if current_test_case:
-        test_cases.append(current_test_case)
-    return test_cases
 
 
 def parse_tags(tag_string):
@@ -385,11 +291,6 @@ def build_fields(data_tags, title, linked_items, transformed_steps):
             [
                 {
                     "op": "replace",
-                    "path": "/fields/Custom.AutomationStatus",
-                    "value": data_tags[0],
-                },
-                {
-                    "op": "replace",
                     "path": "/fields/Microsoft.VSTS.Common.Priority",
                     "value": data_tags[1],
                 },
@@ -414,6 +315,38 @@ def build_fields(data_tags, title, linked_items, transformed_steps):
     ]
 
     return list(filter(lambda x: x["value"] is not None and x["value"] != "", fields))
+
+
+def log_sync_changes(test_case_id, operation):
+    """
+    Logs synchronization changes to the sync_log.txt file.
+
+    Args:
+        test_case_id (str): The ID of the test case.
+        operation (str): The type of operation performed (e.g., "PATCH").
+
+    Returns:
+        None
+    """
+    path = sync_config["path"]
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    log_entry = f"{operation} Test Case ID: {test_case_id} - {operation} Date Change: {timestamp}"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    log_file_path = os.path.join(path, "sync_log.txt")
+    with open(log_file_path, "r+") as log_file:
+        lines = log_file.readlines()
+        log_file.seek(0)
+        updated = False
+        for line in lines:
+            if f"{operation} Test Case ID: {test_case_id}" in line:
+                log_file.write(log_entry + "\n")
+                updated = True
+            else:
+                log_file.write(line)
+        if not updated:
+            log_file.write(log_entry + "\n")
+        log_file.truncate()
 
 
 def update_azure_test_case(
@@ -486,6 +419,9 @@ def update_azure_test_case(
             url, data=payload, headers=headers, timeout=timeout_seconds
         )
         if response.status_code == 200:
+            test_case_id_match = re.search(r"TestCase\s*(\d+)", cases_dict["Tags"])
+            test_case_id = test_case_id_match.group(1) if test_case_id_match else ""
+            log_sync_changes(test_case_id, "PATCH")
             print("Atualização dos Tests Cases na Azure bem-sucedida!")
         else:
             print(
@@ -502,32 +438,31 @@ def update_azure_test_case(
     except requests.RequestException as e:
         print(f"Erro na atualização dos Tests Cases na Azure: {e}")
 
+
 def rf_azure_sync_patch():
     """
-     This function performs synchronization between the Robot Framework and Azure DevOps.
-     It reads Robot Framework files, extracts test cases and tags, and updates
-     the corresponding test cases in Azure DevOps.
-     """
-    config_data = load_sync_config()
-    path_robot_files = find_robot_files(config_data["path"])
+    This function performs synchronization between the Robot Framework and Azure DevOps.
+    It reads Robot Framework files, extracts test cases and tags, and updates
+    the corresponding test cases in Azure DevOps.
+    """
+    path_robot_files = find_robot_files(sync_config["path"])
     for robot_file in path_robot_files:
         if "todo_organize.robot" not in robot_file:
             content = read_robot_file(robot_file)
             test_cases_data, test_tags = extract_test_tags_and_test_cases(content)
-            cases = parse_test_cases(test_cases_data, config_data)
+            cases = extract_test_cases(test_cases_data, sync_config)
             for case in cases:
                 print("\n" + "=" * 70)
-                # test_case_identifier = (
-                #     re.search(r"TestCase\s*(\d+)", case["Tags"]).group(1)
-                #     if "TestCase" in case["Tags"]
-                #     else "N/A"
-                # )
                 tags = parse_tags(case["Tags"])
                 user_story_ids = tags.get("UserStory", [])
                 bug_ids = tags.get("Bug", [])
                 linked_item_id = user_story_ids + bug_ids
                 steps = transform_steps(case["Steps"])
-                update_azure_test_case(case, test_tags, steps, config_data, linked_item_id)
+                update_azure_test_case(
+                    case, test_tags, steps, sync_config, linked_item_id
+                )
+
+sync_config = load_sync_config()
 
 if __name__ == "__main__":
     rf_azure_sync_patch()

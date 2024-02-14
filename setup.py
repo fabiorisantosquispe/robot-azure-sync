@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='rf_azure_sync',
-    version='0.1.2',
+    version='1.0.0',
     packages=find_packages(),
     install_requires=[
         'requests',
@@ -20,7 +20,7 @@ setup(
     url='https://github.com/fabiorisantosquispe/rf_azure_sync',
     license='MIT',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
